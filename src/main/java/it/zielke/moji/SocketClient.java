@@ -2,7 +2,9 @@ package it.zielke.moji;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.MalformedURLException;
@@ -16,8 +18,8 @@ import java.util.Locale;
 import java.util.Vector;
 
 import org.apache.commons.io.Charsets;
-import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.io.IOUtils;
 
 /**
  * Client for communicating with the MOSS server socket. Handles the
@@ -37,7 +39,7 @@ public class SocketClient {
 	private String language;
 	private int setID = STARTING_SETID;
 	private long optM = 10;
-	private int optD = 1;
+	private int optD = 0;
 	private int optX = 0;
 	private long optN = 250;
 	private String optC = "";
@@ -502,7 +504,7 @@ public class SocketClient {
 	 *             if the file could not be read
 	 */
 	public void uploadFile(File file) throws IOException {
-		uploadFile(file, false);
+		uploadStream(file.getAbsolutePath(), new FileInputStream(file), false);
 	}
 
 	/**
@@ -514,13 +516,41 @@ public class SocketClient {
 	 *             if the file could not be read
 	 */
 	public void uploadBaseFile(File file) throws IOException {
-		uploadFile(file, true);
+		uploadStream(file.getAbsolutePath(), new FileInputStream(file), true);
+	}
+	
+	/**
+	 * Uploads a single file using a InputStream to the MOSS server.
+	 *
+	 * @param streamName
+	 *            the source code name
+	 * @param inputStream
+	 *            the source code file to be uploaded
+	 * @throws IOException
+	 *             if the stream could not be read
+	 */
+	public void uploadInputStream(String streamName, InputStream inputStream) throws IOException {
+		uploadStream(streamName, inputStream, false);
+	}
+	
+	/**
+	 * Uploads a single base file using a InputStream to the MOSS server.
+	 * 
+	 * @param streamName
+	 *            the source code name
+	 * @param inputStream
+	 *            the base file to be uploaded
+	 * @throws IOException
+	 *             if the stream could not be read
+	 */
+	public void uploadBaseInputStream(String streamName, InputStream inputStream) throws IOException {
+		uploadStream(streamName, inputStream, true);
 	}
 
 	/**
 	 * Uploads a single file to the MOSS server.
 	 * 
-	 * @param file
+	 * @param inputStream
 	 *            the source code file to be uploaded
 	 * @param isBaseFile
 	 *            true is base file. false otherwise.
@@ -528,14 +558,13 @@ public class SocketClient {
 	 *             if the file could not be read
 	 */
 	@edu.umd.cs.findbugs.annotations.SuppressWarnings(value = "VA_FORMAT_STRING_USES_NEWLINE", justification = "We do want platform-independent newline here.")
-	public void uploadFile(File file, boolean isBaseFile) throws IOException {
+	public void uploadStream(String streamName, InputStream inputStream, boolean isBaseFile) throws IOException {	
 		if (currentStage != Stage.AWAITING_FILES
 				&& currentStage != Stage.AWAITING_QUERY) {
 			throw new RuntimeException(
 					"Cannot upload file. Client is either not initialized properly or the connection is already closed");
 		}
-		byte[] fileBytes = FileUtils.readFileToByteArray(file);
-		String filename = normalizeFilename(file.getAbsolutePath());
+		byte[] fileBytes = IOUtils.toByteArray(inputStream);
 		String uploadString = String.format(Locale.ENGLISH,
 				"file %d %s %d %s\n", // format:
 				isBaseFile ? 0 : getIncSetID(), // 1. setID
@@ -545,8 +574,8 @@ public class SocketClient {
 				 * Use Unix-style path to remain consistent. TODO test this with
 				 * non-local files, e.g. on network shares
 				 */
-				filename); // 4. file path
-		System.out.println("uploading file: " + filename);
+				normalizeStreamName(streamName)); // 4. file path
+		System.out.println("uploading file: " + streamName);
 		out.write(uploadString.getBytes(Charsets.US_ASCII));
 		out.write(fileBytes);
 
@@ -554,7 +583,7 @@ public class SocketClient {
 
 	}
 
-	public String normalizeFilename(String filename) {
+	public String normalizeStreamName(String filename) {
 		String result = Normalizer.normalize(filename, Normalizer.Form.NFD);
 		result = FilenameUtils.normalizeNoEndSeparator(result, true)
 				.replaceAll("[^\\p{ASCII}]", "");

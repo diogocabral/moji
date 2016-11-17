@@ -575,7 +575,7 @@ public class SocketClient {
 				 * non-local files, e.g. on network shares
 				 */
 				normalizeStreamName(streamName)); // 4. file path
-		System.out.println("uploading file: " + streamName);
+
 		out.write(uploadString.getBytes(Charsets.US_ASCII));
 		out.write(fileBytes);
 
